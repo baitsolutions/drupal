@@ -1,0 +1,49 @@
+name: Build and Push Docker Image
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        environment: [staging, production]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v1
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Set up .env file
+      run: |
+        echo DB_DATABASE=${{ secrets.DB_DATABASE }} >> .env
+        echo DB_USERNAME=${{ secrets.DB_USERNAME }} >> .env
+        echo DB_PASSWORD=${{ secrets.DB_PASSWORD }} >> .env
+        echo DB_HOST=${{ secrets.DB_HOST }} >> .env
+        echo HASH_SALT=${{ secrets.HASH_SALT }} >> .env
+
+    - name: Install dependencies
+      run: composer install
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v2
+      with:
+        context: .
+        push: true
+        file: ./Dockerfile
+        build-args: |
+          ENVIRONMENT=${{ matrix.environment }}
+        tags: ghcr.io/${{ github.repository_owner }}/drupal-environment:${{ matrix.environment }}
